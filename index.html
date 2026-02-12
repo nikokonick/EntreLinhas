@@ -156,29 +156,7 @@ async function login(){
   loadPosts();
 }
 
-/* ================= POSTS ================= */
-async function createPost(){
-  const res = await fetch(API+"/posts",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":"Bearer "+localStorage.getItem("token")
-    },
-    body:JSON.stringify({
-      content:postContent.value,
-      anonymous:anonymous.checked,
-      hideLikes:hideLikes.checked,
-      mood:mood.value
-    })
-  });
-
-  const data = await res.json();
-  if(data.error){ alert(data.error); return; }
-
-  postContent.value="";
-  loadPosts();
-}
-
+/*-- ================= POSTS ================= */
 async function loadPosts(){
   const res = await fetch(API+"/posts");
   const posts = await res.json();
@@ -207,7 +185,8 @@ async function loadPosts(){
       ${isOwner ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
       <button onclick="reportPost('${p._id}')">Denunciar</button>
 
-      <button onclick="likePost('${p._id}')">
+      <!-- ✅ Adicionamos data-hidelikes para JS -->
+      <button onclick="likePost('${p._id}')" data-hidelikes="${p.hideLikes}">
         Curtir ${!p.hideLikes ? "(" + likesCount + ")" : ""}
       </button>
 
@@ -231,6 +210,31 @@ async function loadPosts(){
     container.appendChild(div);
   });
 }
+
+/* ================= LIKE ================= */
+async function likePost(postId) {
+  const res = await fetch(`${API}/posts/${postId}/like`, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+  });
+
+  const data = await res.json();
+  if (data.error) { 
+    alert(data.error); 
+    return; 
+  }
+
+  // Atualiza apenas o botão clicado
+  const button = document.querySelector(`#posts .post button[onclick="likePost('${postId}')"]`);
+  if (button) {
+    const hideLikes = button.dataset.hidelikes === "true";
+    button.innerText = `Curtir ${!hideLikes ? "(" + data.likes + ")" : ""}`;
+  }
+
+  // Opcional: mantém reload completo para consistência
+  // loadPosts();
+}
+
 
 /* ================= ACTIONS ================= */
 async function deletePost(id){

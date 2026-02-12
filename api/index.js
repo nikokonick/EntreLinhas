@@ -156,11 +156,14 @@ if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
 
   await post.save();
 
+  // Retorna informações completas sobre o like para o frontend
   return res.json({
-    likes: post.likes.length,
-    liked: !liked
+    likes: post.likes.length,         // total de likes atual
+    liked: !liked,                    // true se o usuário acabou de curtir
+    postId: post._id.toString()       // id do post, útil no frontend
   });
 }
+
 
 
 
