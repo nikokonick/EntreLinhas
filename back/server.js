@@ -1,31 +1,16 @@
-/* ================= SERVER.JS ================= */
+import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
-const express = require("express");
-const cors = require("cors");
-const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
-const path = require("path");
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const SECRET = "entrelinhas_secret";
-
-/* ================= MONGODB ================= */
-
-// Agora o Vercel vai pegar a connection string da variável de ambiente
-// No Vercel, vá em Project → Settings → Environment Variables
-// Key: MONGO_URI
-// Value: mongodb+srv://usuario:senha@cluster0.abcd.mongodb.net/entrelinhas?retryWrites=true&w=majority
+const SECRET = process.env.SECRET || "entrelinhas_secret";
 const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URI, {
+if (!mongoose.connection.readyState) {
+  await mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-.then(() => console.log("MongoDB conectado ✅"))
-.catch(err => console.log("Erro MongoDB:", err));
+    useUnifiedTopology: true,
+  });
+  console.log("MongoDB conectado ✅");
+}
 
 /* ================= SCHEMAS ================= */
 
@@ -56,210 +41,165 @@ const postSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-const User = mongoose.model("User", userSchema);
-const Post = mongoose.model("Post", postSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+const Post = mongoose.models.Post || mongoose.model("Post", postSchema);
 
 /* ================= AUTH MIDDLEWARE ================= */
 
-async function auth(req, res, next) {
+async function auth(req) {
   const header = req.headers.authorization;
-  if (!header) return res.status(401).json({ error: "Token necessário" });
+  if (!header) throw { status: 401, error: "Token necessário" };
 
   const token = header.startsWith("Bearer ") ? header.slice(7) : header;
-
   try {
     const decoded = jwt.verify(token, SECRET);
     const user = await User.findById(decoded.id);
-    if (!user) return res.status(401).json({ error: "Usuário não encontrado" });
-    req.user = user;
-    next();
+    if (!user) throw { status: 401, error: "Usuário não encontrado" };
+    return user;
   } catch {
-    res.status(401).json({ error: "Token inválido" });
+    throw { status: 401, error: "Token inválido" };
   }
 }
 
-/* ================= REGISTER ================= */
+/* ================= HANDLER ================= */
 
-app.post("/auth/register", async (req, res) => {
-  const { email, username, password, grade, region } = req.body;
-
-  if (!email || !username || !password || !grade || !region)
-    return res.status(400).json({ error: "Preencha todos os campos" });
+export default async function handler(req, res) {
+  const url = req.url.replace(/^\/api/, "");
+  const method = req.method;
 
   try {
-    const user = new User({ email, username, password, grade, region });
-    await user.save();
-    res.json({ message: "Conta criada" });
-  } catch (err) {
-    if (err.code === 11000) {
-      res.status(400).json({ error: "Email ou username já cadastrado" });
-    } else {
-      res.status(500).json({ error: "Erro no servidor" });
-    }
-  }
-});
+    /* ================= REGISTER ================= */
+    if (url === "/auth/register" && method === "POST") {
+      const { email, username, password, grade, region } = req.body;
+      if (!email || !username || !password || !grade || !region)
+        return res.status(400).json({ error: "Preencha todos os campos" });
 
-/* ================= LOGIN ================= */
-
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email, password });
-  if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
-
-  const token = jwt.sign({ id: user._id, username: user.username }, SECRET);
-  res.json({ token });
-});
-
-/* ================= CREATE POST ================= */
-
-app.post("/posts", auth, async (req, res) => {
-  const { content, anonymous, hideLikes, mood } = req.body;
-
-  if (!content || content.length > 500)
-    return res.status(400).json({ error: "Conteúdo inválido (máx 500 caracteres)" });
-
-  if (/(http|www|\.com|\.net|\.org)/i.test(content))
-    return res.status(400).json({ error: "Links não permitidos" });
-
-  const alreadyPostedToday = await Post.findOne({
-    userId: req.user._id,
-    createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
-  });
-
-  if (alreadyPostedToday)
-    return res.status(400).json({ error: "Você já postou hoje" });
-
-  const post = new Post({
-    userId: req.user._id,
-    username: req.user.username,
-    content,
-    anonymous,
-    hideLikes,
-    mood
-  });
-
-  await post.save();
-  res.json(post);
-});
-
-/* ================= GET POSTS ================= */
-
-app.get("/posts", async (req, res) => {
-  const posts = await Post.find({ hidden: false }).sort({ createdAt: -1 });
-  res.json(posts);
-});
-
-/* ================= LIKE ================= */
-
-app.post("/posts/:id/like", auth, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-  const liked = post.likes.some(id => id.equals(req.user._id));
-  if (liked) post.likes = post.likes.filter(id => !id.equals(req.user._id));
-  else post.likes.push(req.user._id);
-
-  await post.save();
-  res.json({ likes: post.likes.length });
-});
-
-/* ================= COMMENT ================= */
-
-app.post("/posts/:id/comment", auth, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-  const { content } = req.body;
-  if (!content || content.length > 250)
-    return res.status(400).json({ error: "Comentário inválido (máx 250 caracteres)" });
-
-  if (/(http|www|\.com|\.net|\.org)/i.test(content))
-    return res.status(400).json({ error: "Links não permitidos" });
-
-  post.comments.push({
-    userId: req.user._id,
-    username: req.user.username,
-    content
-  });
-
-  await post.save();
-  res.json({ message: "Comentário adicionado" });
-});
-
-/* ================= DELETE POST ================= */
-
-app.delete("/posts/:id", auth, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-  if (!post.userId.equals(req.user._id))
-    return res.status(403).json({ error: "Sem permissão" });
-
-  await Post.deleteOne({ _id: post._id });
-  res.json({ message: "Post apagado" });
-});
-
-/* ================= DELETE COMMENT ================= */
-
-app.delete("/posts/:postId/comment/:commentId", auth, async (req, res) => {
-  const post = await Post.findById(req.params.postId);
-  if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-  const comment = post.comments.id(req.params.commentId);
-  if (!comment) return res.status(404).json({ error: "Comentário não encontrado" });
-
-  if (!comment.userId.equals(req.user._id))
-    return res.status(403).json({ error: "Sem permissão" });
-
-  comment.remove();
-  await post.save();
-  res.json({ message: "Comentário apagado" });
-});
-
-/* ================= REPORT ================= */
-
-app.post("/posts/:id/report", auth, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-  if (post.reports.includes(req.user._id))
-    return res.status(400).json({ error: "Você já denunciou" });
-
-  post.reports.push(req.user._id);
-
-  if (post.reports.length >= 10) post.hidden = true;
-
-  await post.save();
-  res.json({ reports: post.reports.length });
-});
-
-/* ================= HISTORY ================= */
-
-app.get("/me/history", auth, async (req, res) => {
-  const myPosts = await Post.find({ userId: req.user._id });
-  const myComments = [];
-
-  const allPosts = await Post.find();
-  allPosts.forEach(p => {
-    p.comments.forEach(c => {
-      if (c.userId.equals(req.user._id)) {
-        myComments.push({ postId: p._id, ...c.toObject() });
+      try {
+        const user = new User({ email, username, password, grade, region });
+        await user.save();
+        return res.json({ message: "Conta criada" });
+      } catch (err) {
+        if (err.code === 11000) return res.status(400).json({ error: "Email ou username já cadastrado" });
+        else return res.status(500).json({ error: "Erro no servidor" });
       }
-    });
-  });
+    }
 
-  res.json({ posts: myPosts, comments: myComments });
-});
+    /* ================= LOGIN ================= */
+    if (url === "/auth/login" && method === "POST") {
+      const { email, password } = req.body;
+      const user = await User.findOne({ email, password });
+      if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
 
-/* ================= SERVIR FRONT ================= */
+      const token = jwt.sign({ id: user._id, username: user.username }, SECRET);
+      return res.json({ token });
+    }
 
-app.use(express.static(path.join(__dirname, "public")));
+    /* ================= CREATE POST ================= */
+    if (url === "/posts" && method === "POST") {
+      const user = await auth(req);
+      const { content, anonymous, hideLikes, mood } = req.body;
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+      if (!content || content.length > 500)
+        return res.status(400).json({ error: "Conteúdo inválido (máx 500 caracteres)" });
 
-/* ================= SERVER ================= */
+      if (/(http|www|\.com|\.net|\.org)/i.test(content))
+        return res.status(400).json({ error: "Links não permitidos" });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} 🚀`));
+      const alreadyPostedToday = await Post.findOne({
+        userId: user._id,
+        createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
+      });
+      if (alreadyPostedToday) return res.status(400).json({ error: "Você já postou hoje" });
+
+      const post = new Post({ userId: user._id, username: user.username, content, anonymous, hideLikes, mood });
+      await post.save();
+      return res.json(post);
+    }
+
+    /* ================= GET POSTS ================= */
+    if (url === "/posts" && method === "GET") {
+      const posts = await Post.find({ hidden: false }).sort({ createdAt: -1 });
+      return res.json(posts);
+    }
+
+    /* ================= LIKE ================= */
+    if (url.match(/^\/posts\/[a-f0-9]{24}\/like$/) && method === "POST") {
+      const user = await auth(req);
+      const postId = url.split("/")[2];
+      const post = await Post.findById(postId);
+      if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+      const liked = post.likes.some(id => id.equals(user._id));
+      if (liked) post.likes = post.likes.filter(id => !id.equals(user._id));
+      else post.likes.push(user._id);
+
+      await post.save();
+      return res.json({ likes: post.likes.length });
+    }
+
+    /* ================= COMMENT ================= */
+    if (url.match(/^\/posts\/[a-f0-9]{24}\/comment$/) && method === "POST") {
+      const user = await auth(req);
+      const postId = url.split("/")[2];
+      const { content } = req.body;
+
+      if (!content || content.length > 250) return res.status(400).json({ error: "Comentário inválido (máx 250 caracteres)" });
+      if (/(http|www|\.com|\.net|\.org)/i.test(content)) return res.status(400).json({ error: "Links não permitidos" });
+
+      const post = await Post.findById(postId);
+      if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+      post.comments.push({ userId: user._id, username: user.username, content });
+      await post.save();
+      return res.json({ message: "Comentário adicionado" });
+    }
+
+    /* ================= DELETE POST ================= */
+    if (url.match(/^\/posts\/[a-f0-9]{24}$/) && method === "DELETE") {
+      const user = await auth(req);
+      const postId = url.split("/")[2];
+      const post = await Post.findById(postId);
+      if (!post) return res.status(404).json({ error: "Post não encontrado" });
+      if (!post.userId.equals(user._id)) return res.status(403).json({ error: "Sem permissão" });
+
+      await Post.deleteOne({ _id: post._id });
+      return res.json({ message: "Post apagado" });
+    }
+
+    /* ================= REPORT ================= */
+    if (url.match(/^\/posts\/[a-f0-9]{24}\/report$/) && method === "POST") {
+      const user = await auth(req);
+      const postId = url.split("/")[2];
+      const post = await Post.findById(postId);
+      if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+      if (post.reports.includes(user._id)) return res.status(400).json({ error: "Você já denunciou" });
+      post.reports.push(user._id);
+      if (post.reports.length >= 10) post.hidden = true;
+
+      await post.save();
+      return res.json({ reports: post.reports.length });
+    }
+
+    /* ================= HISTORY ================= */
+    if (url === "/me/history" && method === "GET") {
+      const user = await auth(req);
+
+      const myPosts = await Post.find({ userId: user._id });
+      const myComments = [];
+
+      const allPosts = await Post.find();
+      allPosts.forEach(p => {
+        p.comments.forEach(c => {
+          if (c.userId.equals(user._id)) myComments.push({ postId: p._id, ...c.toObject() });
+        });
+      });
+
+      return res.json({ posts: myPosts, comments: myComments });
+    }
+
+    return res.status(404).json({ error: "Rota não encontrada" });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.error || "Erro interno" });
+  }
+}
