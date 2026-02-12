@@ -6,7 +6,6 @@
 <title>EntreLinhas</title>
 
 <style>
-/* --- Estilos mantidos --- */
 body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f7f8; }
 header { background: linear-gradient(90deg, rgba(74,144,226,0.8), rgba(110,198,168,0.8)); padding: 25px; color: white; text-align: center; border-bottom-left-radius: 25px; border-bottom-right-radius: 25px; }
 header h1 { margin: 0; }
@@ -65,10 +64,8 @@ button:hover { opacity: 0.9; }
 </div>
 
 <div id="feedContainer" class="hidden">
-
   <div class="card">
     <h3>Novo desabafo</h3>
-
     <select id="mood">
       <option>😞 Exausto</option>
       <option>😰 Ansioso</option>
@@ -76,16 +73,12 @@ button:hover { opacity: 0.9; }
       <option>🙂 Ok</option>
       <option>😊 Bem</option>
     </select>
-
     <textarea id="postContent" maxlength="500"></textarea>
-
     <label><input type="checkbox" id="anonymous"> Postar como anônimo</label>
     <label><input type="checkbox" id="hideLikes"> Esconder número de curtidas</label>
-
     <button onclick="createPost()">Publicar</button>
     <button onclick="loadHistory()">Meu histórico</button>
   </div>
-
   <div id="posts"></div>
 </div>
 
@@ -114,7 +107,7 @@ button:hover { opacity: 0.9; }
 </div>
 
 <script>
-const API = "/api"; // ✅ URL do backend Vercel
+const API = "/api";
 
 /* ================= AUTH ================= */
 async function register(){
@@ -137,126 +130,108 @@ async function login(){
   const res = await fetch(API+"/auth/login",{
     method:"POST",
     headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      email:email.value,
-      password:password.value
-    })
+    body:JSON.stringify({ email:email.value, password:password.value })
   });
-
   const data = await res.json();
   if(data.error){ alert(data.error); return; }
-
   localStorage.setItem("token", data.token);
-
   authContainer.classList.add("hidden");
   feedContainer.classList.remove("hidden");
   helpBtn.classList.remove("hidden");
   rulesBtn.classList.remove("hidden");
-
   loadPosts();
 }
 
-/*-- ================= POSTS ================= */
+/* ================= POSTS ================= */
+async function createPost(){
+  const res = await fetch(API+"/posts",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+localStorage.getItem("token")
+    },
+    body:JSON.stringify({
+      content:postContent.value,
+      anonymous:anonymous.checked,
+      hideLikes:hideLikes.checked,
+      mood:mood.value
+    })
+  });
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
+  postContent.value="";
+  loadPosts();
+}
+
 async function loadPosts(){
   const res = await fetch(API+"/posts");
   const posts = await res.json();
-
   const container = document.getElementById("posts");
   container.innerHTML="";
-
+  const userId = getUserId();
   posts.forEach(p=>{
     const div = document.createElement("div");
     div.className="post";
-
-    const username = p.anonymous ? "Anônimo" : escapeHtml(p.username); // ✅ sanitizado
-
-    const userId = getUserId();
+    const username = p.anonymous ? "Anônimo" : escapeHtml(p.username);
     const isOwner = p.userId === userId;
-
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
     const comments = Array.isArray(p.comments) ? p.comments : [];
-
     div.innerHTML=`
-      <strong>${escapeHtml(p.mood || "")}</strong><br>  <!-- ✅ sanitizado -->
+      <strong>${escapeHtml(p.mood || "")}</strong><br>
       ${username}<br>
-      <p>${escapeHtml(p.content)}</p>  <!-- ✅ sanitizado -->
+      <p>${escapeHtml(p.content)}</p>
       <small>${new Date(p.createdAt).toLocaleString()}</small><br>
-
       ${isOwner ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
       <button onclick="reportPost('${p._id}')">Denunciar</button>
-
-      <!-- ✅ Adicionamos data-hidelikes para JS -->
       <button onclick="likePost('${p._id}')" data-hidelikes="${p.hideLikes}">
         Curtir ${!p.hideLikes ? "(" + likesCount + ")" : ""}
       </button>
-
       <div>
         <input id="commentInput${p._id}" placeholder="Comentar...">
         <button onclick="commentPost('${p._id}')">Enviar</button>
       </div>
-
       <div class="commentBox">
         ${comments.map(c=>`
           <div>
-            <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}  <!-- ✅ sanitizado -->
-            ${c.userId === userId 
-              ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` 
-              : ""}
+            <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}
+            ${c.userId === userId ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
           </div>
         `).join("")}
       </div>
     `;
-
     container.appendChild(div);
   });
 }
 
 /* ================= LIKE ================= */
 async function likePost(postId) {
-  const res = await fetch(`${API}/posts/${postId}/like`, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+  const res = await fetch(`${API}/posts/${postId}/like`,{
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
   });
-
   const data = await res.json();
-  if (data.error) { 
-    alert(data.error); 
-    return; 
-  }
-
-  // Atualiza apenas o botão clicado
+  if(data.error){ alert(data.error); return; }
+  // Atualiza botão clicado
   const button = document.querySelector(`#posts .post button[onclick="likePost('${postId}')"]`);
-  if (button) {
+  if(button){
     const hideLikes = button.dataset.hidelikes === "true";
     button.innerText = `Curtir ${!hideLikes ? "(" + data.likes + ")" : ""}`;
   }
-
-  // Opcional: mantém reload completo para consistência
-  // loadPosts();
 }
-
 
 /* ================= ACTIONS ================= */
 async function deletePost(id){
-  await fetch(API+"/posts/"+id,{
-    method:"DELETE",
-    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
-  });
+  await fetch(API+"/posts/"+id,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") } });
   loadPosts();
 }
 
 async function commentPost(id){
   const input = document.getElementById("commentInput"+id);
-
   await fetch(API+"/posts/"+id+"/comment",{
     method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":"Bearer "+localStorage.getItem("token")
-    },
+    headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+localStorage.getItem("token") },
     body:JSON.stringify({ content:input.value })
   });
-
   loadPosts();
 }
 
@@ -269,20 +244,14 @@ async function deleteComment(postId,commentId){
 }
 
 async function reportPost(id){
-  await fetch(API+"/posts/"+id+"/report",{
-    method:"POST",
-    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
-  });
+  await fetch(API+"/posts/"+id+"/report",{ method:"POST", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") } });
   alert("Denunciado");
 }
 
 async function loadHistory(){
-  const res = await fetch(API+"/me/history",{
-    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
-  });
-
+  const res = await fetch(API+"/me/history",{ headers:{ "Authorization":"Bearer "+localStorage.getItem("token") } });
   const data = await res.json();
-  alert("Você tem "+data.posts.length+" posts e "+data.comments.length+" comentários.");
+  alert(`Você tem ${data.posts.length} posts e ${data.comments.length} comentários.`);
 }
 
 function getUserId(){
@@ -295,16 +264,13 @@ function getUserId(){
 /* ================= HELP ================= */
 helpBtn.onclick = () => helpModal.classList.remove("hidden");
 rulesBtn.onclick = () => rulesModal.classList.remove("hidden");
-
-/* Fecha qualquer modal ao clicar fora */
 window.onclick = function(e){
   if(e.target === helpModal) helpModal.classList.add("hidden");
   if(e.target === rulesModal) rulesModal.classList.add("hidden");
 }
-
 function closeHelp(){ helpModal.classList.add("hidden"); }
 
-/* Função para sanitizar conteúdo (evitar HTML malicioso) */
+/* ================= SANITIZAÇÃO ================= */
 function escapeHtml(text){
   const div = document.createElement("div");
   div.innerText = text;

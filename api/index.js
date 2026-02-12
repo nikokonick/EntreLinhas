@@ -130,48 +130,35 @@ export default async function handler(req, res) {
     return res.json(post);
   }
 
-// ================= LIKE =================
-if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
-
-  if (!currentUser) {
-    return res.status(401).json({ error: "Token necessário" });
-  }
-
-  const postId = parts[3];
-
-  const post = await Post.findById(postId);
-  if (!post) {
-    return res.status(404).json({ error: "Post não encontrado" });
-  }
-
-  const liked = post.likes.some(id => id.equals(currentUser._id));
-
-  if (liked) {
-    // 🔁 Remove o like (descurtir)
-    post.likes = post.likes.filter(id => !id.equals(currentUser._id));
-  } else {
-    // ❤️ Adiciona o like
-    post.likes.push(currentUser._id);
-  }
-
-  await post.save();
-
-  // Retorna informações completas sobre o like para o frontend
-  return res.json({
-    likes: post.likes.length,         // total de likes atual
-    liked: !liked,                    // true se o usuário acabou de curtir
-    postId: post._id.toString()       // id do post, útil no frontend
-  });
-}
-
-
-
-
-  // ================= COMMENT =================
-  if (url.match(/\/posts\/[a-f0-9]{24}\/comment$/) && method === "POST") {
+  // ================= LIKE =================
+  if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[3];
+    const postId = parts[2]; // corrigido: a posição correta do ID
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+    const liked = post.likes.some(id => id.equals(currentUser._id));
+    if (liked) {
+      post.likes = post.likes.filter(id => !id.equals(currentUser._id));
+    } else {
+      post.likes.push(currentUser._id);
+    }
+
+    await post.save();
+
+    return res.json({
+      likes: post.likes.length,
+      liked: !liked,
+      postId: post._id.toString()
+    });
+  }
+
+  // ================= COMMENT =================
+  if (/^\/posts\/[a-f0-9]{24}\/comment$/.test(url) && method === "POST") {
+    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
+
+    const postId = parts[2];
     const { content } = req.body;
 
     if (!content || content.length > 250)
@@ -194,11 +181,10 @@ if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
   }
 
   // ================= DELETE POST =================
-  if (url.match(/\/posts\/[a-f0-9]{24}$/) && method === "DELETE") {
+  if (/^\/posts\/[a-f0-9]{24}$/.test(url) && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[3];
-
+    const postId = parts[2];
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
@@ -206,17 +192,15 @@ if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
       return res.status(403).json({ error: "Sem permissão" });
 
     await Post.deleteOne({ _id: post._id });
-
     return res.json({ message: "Post apagado" });
   }
 
   // ================= DELETE COMMENT =================
-  if (url.match(/\/posts\/[a-f0-9]{24}\/comment\/[a-f0-9]{24}/) && method === "DELETE") {
+  if (/^\/posts\/[a-f0-9]{24}\/comment\/[a-f0-9]{24}$/.test(url) && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[3];
-    const commentId = parts[5];
-
+    const postId = parts[2];
+    const commentId = parts[4];
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
