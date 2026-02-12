@@ -130,26 +130,39 @@ export default async function handler(req, res) {
     return res.json(post);
   }
 
-  // ================= LIKE =================
-  if (url.match(/\/posts\/[a-f0-9]{24}\/like/) && method === "POST") {
-    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
+// ================= LIKE =================
+if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
 
-    const postId = parts[3];
-
-    const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-    const liked = post.likes.some(id => id.equals(currentUser._id));
-
-    if (liked) {
-      post.likes = post.likes.filter(id => !id.equals(currentUser._id));
-    } else {
-      post.likes.push(currentUser._id);
-    }
-
-    await post.save();
-    return res.json({ likes: post.likes.length });
+  if (!currentUser) {
+    return res.status(401).json({ error: "Token necessário" });
   }
+
+  const postId = parts[3];
+
+  const post = await Post.findById(postId);
+  if (!post) {
+    return res.status(404).json({ error: "Post não encontrado" });
+  }
+
+  const liked = post.likes.some(id => id.equals(currentUser._id));
+
+  if (liked) {
+    // 🔁 Remove o like (descurtir)
+    post.likes = post.likes.filter(id => !id.equals(currentUser._id));
+  } else {
+    // ❤️ Adiciona o like
+    post.likes.push(currentUser._id);
+  }
+
+  await post.save();
+
+  return res.json({
+    likes: post.likes.length,
+    liked: !liked
+  });
+}
+
+
 
   // ================= COMMENT =================
   if (url.match(/\/posts\/[a-f0-9]{24}\/comment$/) && method === "POST") {
