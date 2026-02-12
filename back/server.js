@@ -14,12 +14,18 @@ const SECRET = "entrelinhas_secret";
 
 /* ================= MONGODB ================= */
 
-// Substitua pela sua URI do MongoDB Atlas
-const MONGO_URI = "mongodb+srv://nikoko:senhaforte2430@entrelinhas.tzpt5a7.mongodb.net/entrelinhas?retryWrites=true&w=majority";
+// Agora o Vercel vai pegar a connection string da variável de ambiente
+// No Vercel, vá em Project → Settings → Environment Variables
+// Key: MONGO_URI
+// Value: mongodb+srv://usuario:senha@cluster0.abcd.mongodb.net/entrelinhas?retryWrites=true&w=majority
+const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("MongoDB conectado ✅"))
-  .catch(err => console.log("Erro MongoDB:", err));
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+})
+.then(() => console.log("MongoDB conectado ✅"))
+.catch(err => console.log("Erro MongoDB:", err));
 
 /* ================= SCHEMAS ================= */
 
@@ -59,7 +65,6 @@ async function auth(req, res, next) {
   const header = req.headers.authorization;
   if (!header) return res.status(401).json({ error: "Token necessário" });
 
-  // Suporta "Bearer <token>"
   const token = header.startsWith("Bearer ") ? header.slice(7) : header;
 
   try {
@@ -256,4 +261,5 @@ app.get('/', (req, res) => {
 
 /* ================= SERVER ================= */
 
-app.listen(3000, () => console.log("Servidor rodando na porta 3000 🚀"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT} 🚀`));
