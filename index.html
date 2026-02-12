@@ -181,25 +181,42 @@ async function loadPosts(){
       ${username}<br>
       <p>${escapeHtml(p.content)}</p>
       <small>${new Date(p.createdAt).toLocaleString()}</small><br>
-      ${isOwner ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
-      <button onclick="reportPost('${p._id}')">Denunciar</button>
-      <button onclick="likePost('${p._id}')" data-hidelikes="${p.hideLikes}">
+      ${isOwner ? `<button data-postid="${p._id}" class="deleteBtn">Apagar</button>` : ""}
+      <button data-postid="${p._id}" class="reportBtn">Denunciar</button>
+      <button data-postid="${p._id}" data-hidelikes="${p.hideLikes}" class="likeBtn">
         Curtir ${!p.hideLikes ? "(" + likesCount + ")" : ""}
       </button>
       <div>
         <input id="commentInput${p._id}" placeholder="Comentar...">
-        <button onclick="commentPost('${p._id}')">Enviar</button>
+        <button data-postid="${p._id}" class="commentBtn">Enviar</button>
       </div>
       <div class="commentBox">
         ${comments.map(c=>`
           <div>
             <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}
-            ${c.userId === userId || c.userId === String(userId) ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
+            ${(c.userId === userId || c.userId === String(userId)) ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>` : ""}
           </div>
         `).join("")}
       </div>
     `;
     container.appendChild(div);
+  });
+
+  // ================= EVENTOS =================
+  document.querySelectorAll(".deleteBtn").forEach(btn=>{
+    btn.onclick = () => deletePost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".reportBtn").forEach(btn=>{
+    btn.onclick = () => reportPost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".likeBtn").forEach(btn=>{
+    btn.onclick = () => likePost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".commentBtn").forEach(btn=>{
+    btn.onclick = () => commentPost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".deleteCommentBtn").forEach(btn=>{
+    btn.onclick = () => deleteComment(btn.dataset.postid, btn.dataset.commentid);
   });
 }
 
@@ -211,42 +228,49 @@ async function likePost(postId){
   });
   const data = await res.json();
   if(data.error){ alert(data.error); return; }
-  const button = document.querySelector(`#posts .post button[onclick="likePost('${postId}')"]`);
-  if(button){
-    const hideLikes = button.dataset.hidelikes === "true";
-    button.innerText = `Curtir ${!hideLikes ? "(" + data.likes + ")" : ""}`;
-  }
+  loadPosts(); // atualiza botão e contagem
 }
 
 /* ================= ACTIONS ================= */
 async function deletePost(id){
-  await fetch(API+"/posts/"+id,{
+  const res = await fetch(`${API}/posts/${id}`,{
     method:"DELETE",
     headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
   });
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
   loadPosts();
 }
 
 async function commentPost(id){
   const input = document.getElementById("commentInput"+id);
-  await fetch(API+"/posts/"+id+"/comment",{
+  if(!input.value) return;
+  const res = await fetch(`${API}/posts/${id}/comment`,{
     method:"POST",
     headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+localStorage.getItem("token") },
     body:JSON.stringify({ content:input.value })
   });
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
+  input.value="";
   loadPosts();
 }
 
 async function deleteComment(postId,commentId){
-  await fetch(API+"/posts/"+postId+"/comment/"+commentId,{
+  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`,{
     method:"DELETE",
     headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
   });
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
   loadPosts();
 }
 
 async function reportPost(id){
-  await fetch(API+"/posts/"+id+"/report",{ method:"POST", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") } });
+  await fetch(`${API}/posts/${id}/report`,{
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
   alert("Denunciado");
 }
 
