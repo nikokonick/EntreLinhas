@@ -173,7 +173,7 @@ async function loadPosts(){
     const div = document.createElement("div");
     div.className="post";
     const username = p.anonymous ? "Anônimo" : escapeHtml(p.username);
-    const isOwner = p.userId === userId;
+    const isOwner = p.userId === userId || p.userId === String(userId);
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
     const comments = Array.isArray(p.comments) ? p.comments : [];
     div.innerHTML=`
@@ -194,7 +194,7 @@ async function loadPosts(){
         ${comments.map(c=>`
           <div>
             <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}
-            ${c.userId === userId ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
+            ${c.userId === userId || c.userId === String(userId) ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
           </div>
         `).join("")}
       </div>
@@ -204,14 +204,13 @@ async function loadPosts(){
 }
 
 /* ================= LIKE ================= */
-async function likePost(postId) {
+async function likePost(postId){
   const res = await fetch(`${API}/posts/${postId}/like`,{
     method:"POST",
     headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
   });
   const data = await res.json();
   if(data.error){ alert(data.error); return; }
-  // Atualiza botão clicado
   const button = document.querySelector(`#posts .post button[onclick="likePost('${postId}')"]`);
   if(button){
     const hideLikes = button.dataset.hidelikes === "true";
@@ -221,7 +220,10 @@ async function likePost(postId) {
 
 /* ================= ACTIONS ================= */
 async function deletePost(id){
-  await fetch(API+"/posts/"+id,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") } });
+  await fetch(API+"/posts/"+id,{
+    method:"DELETE",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
   loadPosts();
 }
 

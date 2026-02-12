@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
   const url = req.url;
   const method = req.method;
-  const parts = url.split("/");
+  const parts = url.split("/").filter(Boolean); // remove vazios
 
   // ================= AUTH =================
   if (url.endsWith("/auth/register") && method === "POST") {
@@ -131,10 +131,10 @@ export default async function handler(req, res) {
   }
 
   // ================= LIKE =================
-  if (/^\/posts\/[a-f0-9]{24}\/like$/.test(url) && method === "POST") {
+  if (parts[0] === "posts" && parts[1] && parts[2] === "like" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[2]; // corrigido: a posição correta do ID
+    const postId = parts[1];
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
@@ -146,7 +146,6 @@ export default async function handler(req, res) {
     }
 
     await post.save();
-
     return res.json({
       likes: post.likes.length,
       liked: !liked,
@@ -155,10 +154,10 @@ export default async function handler(req, res) {
   }
 
   // ================= COMMENT =================
-  if (/^\/posts\/[a-f0-9]{24}\/comment$/.test(url) && method === "POST") {
+  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[2];
+    const postId = parts[1];
     const { content } = req.body;
 
     if (!content || content.length > 250)
@@ -181,10 +180,10 @@ export default async function handler(req, res) {
   }
 
   // ================= DELETE POST =================
-  if (/^\/posts\/[a-f0-9]{24}$/.test(url) && method === "DELETE") {
+  if (parts[0] === "posts" && parts[1] && parts.length === 2 && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[2];
+    const postId = parts[1];
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
@@ -196,11 +195,11 @@ export default async function handler(req, res) {
   }
 
   // ================= DELETE COMMENT =================
-  if (/^\/posts\/[a-f0-9]{24}\/comment\/[a-f0-9]{24}$/.test(url) && method === "DELETE") {
+  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && parts[3] && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
-    const postId = parts[2];
-    const commentId = parts[4];
+    const postId = parts[1];
+    const commentId = parts[3];
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
@@ -212,7 +211,6 @@ export default async function handler(req, res) {
 
     comment.remove();
     await post.save();
-
     return res.json({ message: "Comentário apagado" });
   }
 
