@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EntreLinhas</title>
+
+<style>
+body {
+  font-family: 'Segoe UI', sans-serif;
+  margin: 0;
+  background: #f4f7f8;
+}
+
+/* HEADER */
+header {
+  background: linear-gradient(90deg, rgba(74,144,226,0.8), rgba(110,198,168,0.8));
+  padding: 25px;
+  color: white;
+  text-align: center;
+  border-bottom-left-radius: 25px;
+  border-bottom-right-radius: 25px;
+}
+
+header h1 {
+  margin: 0;
+}
+
+header p {
+  margin: 5px 0 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.card, .post {
+  background: white;
+  padding: 20px;
+  margin: 20px auto;
+  max-width: 600px;
+  border-radius: 20px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+}
+
+textarea, input, select {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+}
+
+button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  background: #4A90E2;
+  color: white;
+  margin: 5px 3px 0 0;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+.helpFloating, .rulesFloating {
+  position: fixed;
+  bottom: 25px;
+  right: 25px;
+  background: red;
+  padding: 14px 18px;
+  border-radius: 50px;
+  font-weight: bold;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  z-index: 1000;
+}
+
+.rulesFloating {
+  right: 150px;
+  background: #4A90E2;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 25px;
+  border-radius: 20px;
+  max-width: 400px;
+  text-align: center;
+}
+
+.hidden { display: none; }
+
+.commentBox {
+  margin-top: 10px;
+  background: #f9f9f9;
+  padding: 10px;
+  border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>EntreLinhas</h1>
+  <p>Um espaço seguro para estudantes desabafarem</p>
+</header>
+
+<div id="authContainer" class="card">
+  <h3>Entrar</h3>
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Senha">
+  <button onclick="login()">Entrar</button>
+
+  <h3>Criar conta</h3>
+  <input id="newEmail" placeholder="Email">
+  <input id="newUsername" maxlength="15" placeholder="Username (até 15 caracteres)">
+  <input id="newPassword" type="password" placeholder="Senha">
+  <select id="region">
+    <option value="">Selecione sua região</option>
+    <option>Norte</option>
+    <option>Nordeste</option>
+    <option>Centro-Oeste</option>
+    <option>Sudeste</option>
+    <option>Sul</option>
+  </select>
+  <select id="grade">
+    <option value="">Selecione seu ano escolar</option>
+    <option>6º ano</option>
+    <option>7º ano</option>
+    <option>8º ano</option>
+    <option>9º ano</option>
+    <option>1º ano do Ensino Médio</option>
+    <option>2º ano do Ensino Médio</option>
+    <option>3º ano do Ensino Médio</option>
+    <option>IF</option>
+    <option>Faculdade</option>
+  </select>
+  <button onclick="register()">Cadastrar</button>
+</div>
+
+<div id="feedContainer" class="hidden">
+
+  <div class="card">
+    <h3>Novo desabafo</h3>
+
+    <select id="mood">
+      <option>😞 Exausto</option>
+      <option>😰 Ansioso</option>
+      <option>😔 Desmotivado</option>
+      <option>🙂 Ok</option>
+      <option>😊 Bem</option>
+    </select>
+
+    <textarea id="postContent" maxlength="500"></textarea>
+
+    <label><input type="checkbox" id="anonymous"> Postar como anônimo</label>
+    <label><input type="checkbox" id="hideLikes"> Esconder número de curtidas</label>
+
+    <button onclick="createPost()">Publicar</button>
+    <button onclick="loadHistory()">Meu histórico</button>
+  </div>
+
+  <div id="posts"></div>
+</div>
+
+<button id="helpBtn" class="helpFloating hidden">Ajuda</button>
+<button id="rulesBtn" class="rulesFloating hidden">Regras do site</button>
+
+<div id="helpModal" class="modal hidden">
+  <div class="modal-content">
+    <h2>Precisa de ajuda imediata?</h2>
+    <p>Se estiver em sofrimento intenso, ligue:</p>
+    <a href="tel:188" class="cvvBtn">Ligar 188 (CVV)</a>
+    <button onclick="closeHelp()">Fechar</button>
+  </div>
+</div>
+
+<div id="rulesModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Regras do site</h3>
+    <ul style="text-align:left;">
+      <li>Não fugir do tema do site.</li>
+      <li>Não colocar links.</li>
+      <li>Não se promover.</li>
+      <li>Não brigar ou xingar outros usuários.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:3000";
+
+/* ================= AUTH ================= */
+async function register(){
+  const res = await fetch(API+"/auth/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      email:newEmail.value,
+      username:newUsername.value,
+      password:newPassword.value,
+      region:region.value,
+      grade:grade.value
+    })
+  });
+  const data = await res.json();
+  alert(data.message || data.error);
+}
+
+async function login(){
+  const res = await fetch(API+"/auth/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      email:email.value,
+      password:password.value
+    })
+  });
+
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
+
+  localStorage.setItem("token", data.token);
+
+  authContainer.classList.add("hidden");
+  feedContainer.classList.remove("hidden");
+  helpBtn.classList.remove("hidden");
+  rulesBtn.classList.remove("hidden");
+
+  loadPosts();
+}
+
+/* ================= POSTS ================= */
+async function createPost(){
+  const res = await fetch(API+"/posts",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+localStorage.getItem("token")
+    },
+    body:JSON.stringify({
+      content:postContent.value,
+      anonymous:anonymous.checked,
+      hideLikes:hideLikes.checked,
+      mood:mood.value
+    })
+  });
+
+  const data = await res.json();
+  if(data.error){ alert(data.error); return; }
+
+  postContent.value="";
+  loadPosts();
+}
+
+async function loadPosts(){
+  const res = await fetch(API+"/posts");
+  const posts = await res.json();
+
+  const container = document.getElementById("posts");
+  container.innerHTML="";
+
+  posts.forEach(p=>{
+    const div = document.createElement("div");
+    div.className="post";
+
+    const username = p.anonymous ? "Anônimo" : p.username;
+
+    div.innerHTML=`
+      <strong>${p.mood}</strong><br>
+      ${username}<br>
+      <p>${p.content}</p>
+      <small>${new Date(p.createdAt).toLocaleString()}</small><br>
+
+      ${localStorage.getItem("token") ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
+      <button onclick="reportPost('${p._id}')">Denunciar</button>
+      <button onclick="likePost('${p._id}', ${p.hideLikes})">
+        Curtir ${!p.hideLikes ? "(" + p.likes.length + ")" : ""}
+      </button>
+
+      <div>
+        <input id="commentInput${p._id}" placeholder="Comentar...">
+        <button onclick="commentPost('${p._id}')">Enviar</button>
+      </div>
+
+      <div class="commentBox">
+        ${p.comments.map(c=>`
+          <div>
+            <b>${c.username}</b>: ${c.content}
+            ${c.userId === getUserId() ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
+          </div>
+        `).join("")}
+      </div>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+/* ================= ACTIONS ================= */
+async function deletePost(id){
+  await fetch(API+"/posts/"+id,{
+    method:"DELETE",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
+  loadPosts();
+}
+
+async function commentPost(id){
+  const input = document.getElementById("commentInput"+id);
+
+  await fetch(API+"/posts/"+id+"/comment",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+localStorage.getItem("token")
+    },
+    body:JSON.stringify({ content:input.value })
+  });
+
+  loadPosts();
+}
+
+async function deleteComment(postId,commentId){
+  await fetch(API+"/posts/"+postId+"/comment/"+commentId,{
+    method:"DELETE",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
+  loadPosts();
+}
+
+async function reportPost(id){
+  await fetch(API+"/posts/"+id+"/report",{
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
+  alert("Denunciado");
+}
+
+async function loadHistory(){
+  const res = await fetch(API+"/me/history",{
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
+
+  const data = await res.json();
+  alert("Você tem "+data.posts.length+" posts e "+data.comments.length+" comentários.");
+}
+
+function getUserId(){
+  const token = localStorage.getItem("token");
+  if(!token) return null;
+  const payload = JSON.parse(atob(token.split(".")[1]));
+  return payload.id;
+}
+
+/* ================= HELP ================= */
+helpBtn.onclick = ()=> helpModal.classList.remove("hidden");
+rulesBtn.onclick = ()=> rulesModal.classList.remove("hidden");
+
+/* Fecha qualquer modal ao clicar fora */
+window.onclick = function(e){
+  if(e.target === helpModal) helpModal.classList.add("hidden");
+  if(e.target === rulesModal) rulesModal.classList.add("hidden");
+}
+
+function closeHelp(){ helpModal.classList.add("hidden"); }
+</script>
+
+</body>
+</html>
