@@ -6,7 +6,6 @@ const SECRET = "entrelinhas_secret";
 const MONGO_URI = "mongodb+srv://nikoko:senhaforte2430@entrelinhas.tzpt5a7.mongodb.net/entrelinhas?retryWrites=true&w=majority";
 
 let conn = null;
-
 async function connectDB() {
   if (conn) return conn;
   conn = await mongoose.connect(MONGO_URI);
@@ -51,7 +50,7 @@ export default async function handler(req, res) {
 
   const url = req.url;
   const method = req.method;
-  const parts = url.split("/").filter(Boolean); // remove vazios da URL
+  const parts = url.split("/").filter(Boolean); // remove strings vazias
 
   // ================= AUTH =================
   if (url.endsWith("/auth/register") && method === "POST") {
@@ -82,7 +81,6 @@ export default async function handler(req, res) {
   // ================= AUTENTICAÇÃO =================
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
-
   let currentUser = null;
   if (token) {
     try {
@@ -113,7 +111,6 @@ export default async function handler(req, res) {
       userId: currentUser._id,
       createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
     });
-
     if (alreadyPostedToday)
       return res.status(400).json({ error: "Você já postou hoje" });
 
