@@ -6,6 +6,7 @@ const SECRET = "entrelinhas_secret";
 const MONGO_URI = "mongodb+srv://nikoko:senhaforte2430@entrelinhas.tzpt5a7.mongodb.net/entrelinhas?retryWrites=true&w=majority";
 
 let conn = null;
+
 async function connectDB() {
   if (conn) return conn;
   conn = await mongoose.connect(MONGO_URI);
@@ -48,12 +49,15 @@ const Post = mongoose.models.Post || mongoose.model("Post", postSchema);
 export default async function handler(req, res) {
   await connectDB();
 
-  const url = req.url;
   const method = req.method;
-  const parts = url.split("/").filter(Boolean); // remove strings vazias
+
+  // Normaliza a rota e remove query params
+  const fullPath = req.url.split("?")[0];
+  const path = fullPath.replace(/^\/api/, ""); // remove /api
+  const parts = path.split("/").filter(Boolean);
 
   // ================= AUTH =================
-  if (url.endsWith("/auth/register") && method === "POST") {
+  if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
     const { email, username, password, grade, region } = req.body;
     if (!email || !username || !password || !grade || !region)
       return res.status(400).json({ error: "Preencha todos os campos" });
@@ -69,7 +73,7 @@ export default async function handler(req, res) {
     }
   }
 
-  if (url.endsWith("/auth/login") && method === "POST") {
+  if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
     const { email, password } = req.body;
     const user = await User.findOne({ email, password });
     if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
@@ -81,6 +85,7 @@ export default async function handler(req, res) {
   // ================= AUTENTICAÇÃO =================
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
+
   let currentUser = null;
   if (token) {
     try {
@@ -90,13 +95,13 @@ export default async function handler(req, res) {
   }
 
   // ================= GET POSTS =================
-  if (url.endsWith("/posts") && method === "GET") {
+  if (parts[0] === "posts" && parts.length === 1 && method === "GET") {
     const posts = await Post.find({ hidden: false }).sort({ createdAt: -1 });
     return res.json(posts);
   }
 
   // ================= CREATE POST =================
-  if (url.endsWith("/posts") && method === "POST") {
+  if (parts[0] === "posts" && parts.length === 1 && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
     const { content, anonymous, hideLikes, mood } = req.body;
@@ -111,6 +116,7 @@ export default async function handler(req, res) {
       userId: currentUser._id,
       createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
     });
+
     if (alreadyPostedToday)
       return res.status(400).json({ error: "Você já postou hoje" });
 
