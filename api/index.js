@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
   const url = req.url;
   const method = req.method;
-  const parts = url.split("/").filter(Boolean); // remove vazios
+  const parts = url.split("/").filter(Boolean); // remove vazios da URL
 
   // ================= AUTH =================
   if (url.endsWith("/auth/register") && method === "POST") {
