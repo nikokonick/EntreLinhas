@@ -274,41 +274,51 @@ async function loadPosts(){
   const container = document.getElementById("posts");
   container.innerHTML="";
 
-  posts.forEach(p=>{
-    const div = document.createElement("div");
-    div.className="post";
+ posts.forEach(p=>{
+  const div = document.createElement("div");
+  div.className="post";
 
-    const username = p.anonymous ? "Anônimo" : p.username;
+  const username = p.anonymous ? "Anônimo" : p.username;
 
-    div.innerHTML=`
-      <strong>${p.mood}</strong><br>
-      ${username}<br>
-      <p>${p.content}</p>
-      <small>${new Date(p.createdAt).toLocaleString()}</small><br>
+  const userId = getUserId();
+  const isOwner = p.userId === userId;
 
-      ${localStorage.getItem("token") ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
-      <button onclick="reportPost('${p._id}')">Denunciar</button>
-      <button onclick="likePost('${p._id}', ${p.hideLikes})">
-        Curtir ${!p.hideLikes ? "(" + p.likes.length + ")" : ""}
-      </button>
+  const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
+  const comments = Array.isArray(p.comments) ? p.comments : [];
 
-      <div>
-        <input id="commentInput${p._id}" placeholder="Comentar...">
-        <button onclick="commentPost('${p._id}')">Enviar</button>
-      </div>
+  div.innerHTML=`
+    <strong>${p.mood || ""}</strong><br>
+    ${username}<br>
+    <p>${p.content}</p>
+    <small>${new Date(p.createdAt).toLocaleString()}</small><br>
 
-      <div class="commentBox">
-        ${p.comments.map(c=>`
-          <div>
-            <b>${c.username}</b>: ${c.content}
-            ${c.userId === getUserId() ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` : ""}
-          </div>
-        `).join("")}
-      </div>
-    `;
+    ${isOwner ? `<button onclick="deletePost('${p._id}')">Apagar</button>` : ""}
+    <button onclick="reportPost('${p._id}')">Denunciar</button>
 
-    container.appendChild(div);
-  });
+    <button onclick="likePost('${p._id}')">
+      Curtir ${!p.hideLikes ? "(" + likesCount + ")" : ""}
+    </button>
+
+    <div>
+      <input id="commentInput${p._id}" placeholder="Comentar...">
+      <button onclick="commentPost('${p._id}')">Enviar</button>
+    </div>
+
+    <div class="commentBox">
+      ${comments.map(c=>`
+        <div>
+          <b>${c.username}</b>: ${c.content}
+          ${c.userId === userId 
+            ? `<button onclick="deleteComment('${p._id}','${c._id}')">X</button>` 
+            : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  container.appendChild(div);
+});
+
 }
 
 /* ================= ACTIONS ================= */

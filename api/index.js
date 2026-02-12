@@ -3,8 +3,6 @@ import jwt from "jsonwebtoken";
 
 // ================= CONFIGURAÇÃO =================
 const SECRET = "entrelinhas_secret";
-
-// Substitua pela sua URI do MongoDB Atlas
 const MONGO_URI = "mongodb+srv://nikoko:senhaforte2430@entrelinhas.tzpt5a7.mongodb.net/entrelinhas?retryWrites=true&w=majority";
 
 let conn = null;
@@ -53,6 +51,7 @@ export default async function handler(req, res) {
 
   const url = req.url;
   const method = req.method;
+  const parts = url.split("/");
 
   // ================= AUTH =================
   if (url.endsWith("/auth/register") && method === "POST") {
@@ -92,18 +91,21 @@ export default async function handler(req, res) {
     } catch {}
   }
 
-  // ================= POSTS =================
+  // ================= GET POSTS =================
   if (url.endsWith("/posts") && method === "GET") {
     const posts = await Post.find({ hidden: false }).sort({ createdAt: -1 });
     return res.json(posts);
   }
 
+  // ================= CREATE POST =================
   if (url.endsWith("/posts") && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
     const { content, anonymous, hideLikes, mood } = req.body;
+
     if (!content || content.length > 500)
       return res.status(400).json({ error: "Conteúdo inválido (máx 500 caracteres)" });
+
     if (/(http|www|\.com|\.net|\.org)/i.test(content))
       return res.status(400).json({ error: "Links não permitidos" });
 
@@ -111,6 +113,7 @@ export default async function handler(req, res) {
       userId: currentUser._id,
       createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
     });
+
     if (alreadyPostedToday)
       return res.status(400).json({ error: "Você já postou hoje" });
 
@@ -127,94 +130,90 @@ export default async function handler(req, res) {
     return res.json(post);
   }
 
+  // ================= LIKE =================
   if (url.match(/\/posts\/[a-f0-9]{24}\/like/) && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const postId = url.split("/")[2];
+
+    const postId = parts[3];
+
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
     const liked = post.likes.some(id => id.equals(currentUser._id));
-    if (liked) post.likes = post.likes.filter(id => !id.equals(currentUser._id));
-    else post.likes.push(currentUser._id);
+
+    if (liked) {
+      post.likes = post.likes.filter(id => !id.equals(currentUser._id));
+    } else {
+      post.likes.push(currentUser._id);
+    }
 
     await post.save();
     return res.json({ likes: post.likes.length });
   }
 
-  if (url.match(/\/posts\/[a-f0-9]{24}\/comment/) && method === "POST") {
+  // ================= COMMENT =================
+  if (url.match(/\/posts\/[a-f0-9]{24}\/comment$/) && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const postId = url.split("/")[2];
+
+    const postId = parts[3];
     const { content } = req.body;
 
     if (!content || content.length > 250)
       return res.status(400).json({ error: "Comentário inválido (máx 250 caracteres)" });
+
     if (/(http|www|\.com|\.net|\.org)/i.test(content))
       return res.status(400).json({ error: "Links não permitidos" });
 
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    post.comments.push({ userId: currentUser._id, username: currentUser.username, content });
+    post.comments.push({
+      userId: currentUser._id,
+      username: currentUser.username,
+      content
+    });
+
     await post.save();
     return res.json({ message: "Comentário adicionado" });
   }
 
+  // ================= DELETE POST =================
   if (url.match(/\/posts\/[a-f0-9]{24}$/) && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const postId = url.split("/")[2];
+
+    const postId = parts[3];
+
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
-    if (!post.userId.equals(currentUser._id)) return res.status(403).json({ error: "Sem permissão" });
+
+    if (!post.userId.equals(currentUser._id))
+      return res.status(403).json({ error: "Sem permissão" });
 
     await Post.deleteOne({ _id: post._id });
+
     return res.json({ message: "Post apagado" });
   }
 
+  // ================= DELETE COMMENT =================
   if (url.match(/\/posts\/[a-f0-9]{24}\/comment\/[a-f0-9]{24}/) && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const parts = url.split("/");
-    const postId = parts[2];
-    const commentId = parts[4];
+
+    const postId = parts[3];
+    const commentId = parts[5];
+
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
     const comment = post.comments.id(commentId);
     if (!comment) return res.status(404).json({ error: "Comentário não encontrado" });
-    if (!comment.userId.equals(currentUser._id)) return res.status(403).json({ error: "Sem permissão" });
+
+    if (!comment.userId.equals(currentUser._id))
+      return res.status(403).json({ error: "Sem permissão" });
 
     comment.remove();
     await post.save();
+
     return res.json({ message: "Comentário apagado" });
-  }
-
-  if (url.match(/\/posts\/[a-f0-9]{24}\/report/) && method === "POST") {
-    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const postId = url.split("/")[2];
-    const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-    if (post.reports.includes(currentUser._id)) return res.status(400).json({ error: "Você já denunciou" });
-
-    post.reports.push(currentUser._id);
-    if (post.reports.length >= 10) post.hidden = true;
-    await post.save();
-    return res.json({ reports: post.reports.length });
-  }
-
-  if (url.endsWith("/me/history") && method === "GET") {
-    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const myPosts = await Post.find({ userId: currentUser._id });
-    const myComments = [];
-    const allPosts = await Post.find();
-
-    allPosts.forEach(p => {
-      p.comments.forEach(c => {
-        if (c.userId.equals(currentUser._id)) myComments.push({ postId: p._id, ...c.toObject() });
-      });
-    });
-
-    return res.json({ posts: myPosts, comments: myComments });
   }
 
   res.status(404).json({ error: "Rota não encontrada" });
