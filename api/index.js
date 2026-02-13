@@ -31,7 +31,7 @@ const postSchema = new mongoose.Schema({
   hideLikes: Boolean,
   mood: String,
   likes: [mongoose.Schema.Types.ObjectId],
-  reports: [mongoose.Schema.Types.ObjectId], // já existia
+  reports: [mongoose.Schema.Types.ObjectId],
   comments: [{
     userId: mongoose.Schema.Types.ObjectId,
     username: String,
@@ -92,9 +92,15 @@ export default async function handler(req, res) {
     } catch {}
   }
 
-  // ================= GET POSTS =================
+  // ================= GET POSTS (🔥 CORRIGIDO AQUI) =================
   if (parts[0] === "posts" && parts.length === 1 && method === "GET") {
-    const posts = await Post.find({ hidden: false }).sort({ createdAt: -1 });
+    const posts = await Post.find({
+      $or: [
+        { hidden: false },
+        { hidden: { $exists: false } }
+      ]
+    }).sort({ createdAt: -1 });
+
     return res.json(posts);
   }
 
@@ -131,7 +137,7 @@ export default async function handler(req, res) {
     return res.json(post);
   }
 
-  // ================= REPORT POST (🔥 NOVO BLOCO) =================
+  // ================= REPORT POST =================
   if (parts[0] === "posts" && parts[1] && parts[2] === "report" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
@@ -139,14 +145,12 @@ export default async function handler(req, res) {
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    // 👤 Impede denúncia duplicada
     const alreadyReported = post.reports.some(id => id.equals(currentUser._id));
     if (alreadyReported)
       return res.status(400).json({ error: "Você já denunciou este post" });
 
     post.reports.push(currentUser._id);
 
-    // 🔥 Apaga com 4 denúncias
     if (post.reports.length >= 4) {
       await Post.deleteOne({ _id: post._id });
       return res.json({ message: "Post removido por denúncias" });
