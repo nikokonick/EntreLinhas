@@ -31,7 +31,7 @@ const postSchema = new mongoose.Schema({
   hideLikes: Boolean,
   mood: String,
   likes: [mongoose.Schema.Types.ObjectId],
-  reports: [mongoose.Schema.Types.ObjectId],
+  reports: [mongoose.Schema.Types.ObjectId], // já existia
   comments: [{
     userId: mongoose.Schema.Types.ObjectId,
     username: String,
@@ -50,10 +50,8 @@ export default async function handler(req, res) {
   await connectDB();
 
   const method = req.method;
-
-  // Normaliza a rota e remove query params
   const fullPath = req.url.split("?")[0];
-  const path = fullPath.replace(/^\/api/, ""); // remove /api
+  const path = fullPath.replace(/^\/api/, "");
   const parts = path.split("/").filter(Boolean);
 
   // ================= AUTH =================
@@ -133,6 +131,31 @@ export default async function handler(req, res) {
     return res.json(post);
   }
 
+  // ================= REPORT POST (🔥 NOVO BLOCO) =================
+  if (parts[0] === "posts" && parts[1] && parts[2] === "report" && method === "POST") {
+    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
+
+    const postId = parts[1];
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+    // 👤 Impede denúncia duplicada
+    const alreadyReported = post.reports.some(id => id.equals(currentUser._id));
+    if (alreadyReported)
+      return res.status(400).json({ error: "Você já denunciou este post" });
+
+    post.reports.push(currentUser._id);
+
+    // 🔥 Apaga com 4 denúncias
+    if (post.reports.length >= 4) {
+      await Post.deleteOne({ _id: post._id });
+      return res.json({ message: "Post removido por denúncias" });
+    }
+
+    await post.save();
+    return res.json({ message: "Denúncia registrada" });
+  }
+
   // ================= LIKE =================
   if (parts[0] === "posts" && parts[1] && parts[2] === "like" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
@@ -180,41 +203,6 @@ export default async function handler(req, res) {
 
     await post.save();
     return res.json({ message: "Comentário adicionado" });
-  }
-
-  // ================= DELETE POST =================
-  if (parts[0] === "posts" && parts[1] && parts.length === 2 && method === "DELETE") {
-    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const postId = parts[1];
-    const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-    if (!post.userId.equals(currentUser._id))
-      return res.status(403).json({ error: "Sem permissão" });
-
-    await Post.deleteOne({ _id: post._id });
-    return res.json({ message: "Post apagado" });
-  }
-
-  // ================= DELETE COMMENT =================
-  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && parts[3] && method === "DELETE") {
-    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const postId = parts[1];
-    const commentId = parts[3];
-    const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-    const comment = post.comments.id(commentId);
-    if (!comment) return res.status(404).json({ error: "Comentário não encontrado" });
-
-    if (!comment.userId.equals(currentUser._id))
-      return res.status(403).json({ error: "Sem permissão" });
-
-    comment.remove();
-    await post.save();
-    return res.json({ message: "Comentário apagado" });
   }
 
   res.status(404).json({ error: "Rota não encontrada" });
