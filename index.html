@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EntreLinhas</title>
+
 <style>
 body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f7f8; }
 header { background: linear-gradient(90deg, rgba(74,144,226,0.8), rgba(110,198,168,0.8)); padding: 25px; color: white; text-align: center; border-bottom-left-radius: 25px; border-bottom-right-radius: 25px; }
@@ -19,8 +20,19 @@ button:hover { opacity: 0.9; }
 .modal-content { background: white; padding: 25px; border-radius: 20px; max-width: 400px; text-align: center; }
 .hidden { display: none; }
 .commentBox { margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 10px; }
-.checkboxGroup { display: flex; justify-content: center; gap: 25px; margin: 10px 0; }
-.checkboxGroup label { display: flex; align-items: center; gap: 6px; }
+
+/* 🔥 NOVO - Centralizar checkboxes */
+.checkboxGroup {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  margin: 10px 0;
+}
+.checkboxGroup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 </style>
 </head>
 
@@ -204,14 +216,14 @@ async function loadPosts(){
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
     const comments = Array.isArray(p.comments) ? p.comments : [];
 
-    div.innerHTML = `
+    div.innerHTML=`
       <strong>${escapeHtml(p.mood || "")}</strong><br>
       ${username}<br>
       <p>${escapeHtml(p.content)}</p>
       <small>${new Date(p.createdAt).toLocaleString()}</small><br>
       ${isOwner ? `<button data-postid="${p._id}" class="deleteBtn">Apagar</button>` : ""}
       <button data-postid="${p._id}" class="reportBtn">Denunciar</button>
-      <button data-postid="${p._id}" data-hidelikes="${p.hideLikes}" class="likeBtn">
+      <button data-postid="${p._id}" data-hidelikes="${p.hideLikes}" data-liked="${p.likes.includes(userId)}" class="likeBtn">
         Curtir ${!p.hideLikes ? "(" + likesCount + ")" : ""}
       </button>
       <div>
@@ -220,7 +232,7 @@ async function loadPosts(){
       </div>
       <div class="commentBox">
         ${comments.map(c=>`
-          <div>
+          <div id="comment${c._id}">
             <b>${escapeHtml(c.username || "Usuário")}</b>: ${escapeHtml(c.content)}
             ${String(c.userId) === String(userId) ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>` : ""}
           </div>
@@ -230,44 +242,77 @@ async function loadPosts(){
     container.appendChild(div);
   });
 
-  document.querySelectorAll(".deleteBtn").forEach(btn => { btn.onclick = () => deletePost(btn.dataset.postid); });
-  document.querySelectorAll(".reportBtn").forEach(btn => { btn.onclick = () => reportPost(btn.dataset.postid); });
-  document.querySelectorAll(".likeBtn").forEach(btn => { btn.onclick = () => likePost(btn.dataset.postid, btn); });
-  document.querySelectorAll(".commentBtn").forEach(btn => {
-    btn.onclick = () => commentPost(btn.dataset.postid, document.getElementById("commentInput"+btn.dataset.postid).value);
+  // ================= EVENTS =================
+  document.querySelectorAll(".deleteBtn").forEach(btn=>{
+    btn.onclick = () => deletePost(btn.dataset.postid);
   });
-  document.querySelectorAll(".deleteCommentBtn").forEach(btn => {
+  document.querySelectorAll(".reportBtn").forEach(btn=>{
+    btn.onclick = () => reportPost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".likeBtn").forEach(btn=>{
+    btn.onclick = () => likePost(btn.dataset.postid, btn);
+  });
+  document.querySelectorAll(".commentBtn").forEach(btn=>{
+    btn.onclick = () => commentPost(btn.dataset.postid);
+  });
+  document.querySelectorAll(".deleteCommentBtn").forEach(btn=>{
     btn.onclick = () => deleteComment(btn.dataset.postid, btn.dataset.commentid);
   });
 }
 
 /* ================= FUNÇÕES DINÂMICAS ================= */
 async function deletePost(postId){
-  const res = await fetch(`${API}/posts/${postId}`,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
+  const res = await fetch(`${API}/posts/${postId}`,{
+    method:"DELETE",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
   const data = await res.json();
   if(data.error) return alert(data.error);
   loadPosts();
 }
 
 async function deleteComment(postId, commentId){
-  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
+  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`,{
+    method:"DELETE",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
   const data = await res.json();
   if(data.error) return alert(data.error);
-  loadPosts();
+  // Remove só o comentário do DOM
+  const commentDiv = document.getElementById("comment"+commentId);
+  if(commentDiv) commentDiv.remove();
 }
 
 async function likePost(postId, btn){
-  const res = await fetch(`${API}/posts/${postId}/like`,{ method:"POST", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
+  const res = await fetch(`${API}/posts/${postId}/like`,{
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }
+  });
   const data = await res.json();
   if(data.error) return alert(data.error);
   const hideLikes = btn.dataset.hidelikes === "true";
   btn.innerText = `Curtir ${hideLikes ? "" : "(" + data.likes + ")"}`;
 }
 
+async function commentPost(postId){
+  const input = document.getElementById("commentInput"+postId);
+  if(!input || !input.value.trim()) return;
+  const res = await fetch(`${API}/posts/${postId}/comment`,{
+    method:"POST",
+    headers:{
+      "Authorization":"Bearer "+localStorage.getItem("token"),
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({ content: input.value })
+  });
+  const data = await res.json();
+  if(data.error) return alert(data.error);
+  input.value="";
+  loadPosts(); // recarrega apenas os posts para atualizar comentários
+}
+
 /* ================= MODAIS ================= */
 function closeHelp(){ helpModal.classList.add("hidden"); }
-helpBtn.onclick = ()=>helpModal.classList.remove("hidden");
-rulesBtn.onclick = ()=>rulesModal.classList.remove("hidden");
 </script>
 
 </body>

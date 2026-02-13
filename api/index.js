@@ -147,15 +147,18 @@ export default async function handler(req, res) {
     const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    const commentIndex = post.comments.findIndex(c => String(c._id) === parts[3] && String(c.userId) === String(currentUser._id));
-    if (commentIndex === -1) return res.status(403).json({ error: "Não autorizado ou comentário não existe" });
+    const commentIndex = post.comments.findIndex(c => String(c._id) === parts[3]);
+    if (commentIndex === -1) return res.status(404).json({ error: "Comentário não encontrado" });
+
+    if (String(post.comments[commentIndex].userId) !== String(currentUser._id))
+      return res.status(403).json({ error: "Não autorizado" });
 
     post.comments.splice(commentIndex, 1);
     await post.save();
     return res.json({ message: "Comentário apagado" });
   }
 
-  // ================= LIKE =================
+  // ================= LIKE POST =================
   if (parts[0] === "posts" && parts[1] && parts[2] === "like" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
     const post = await Post.findById(parts[1]);
@@ -184,5 +187,6 @@ export default async function handler(req, res) {
     return res.json({ message: "Denúncia registrada" });
   }
 
-  res.status(404).json({ error: "Rota não encontrada" });
+  // ================= ROTA NÃO ENCONTRADA =================
+  return res.status(404).json({ error: "Rota não encontrada" });
 }
