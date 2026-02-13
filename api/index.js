@@ -6,7 +6,6 @@ const SECRET = "entrelinhas_secret";
 const MONGO_URI = "mongodb+srv://nikoko:senhaforte2430@entrelinhas.tzpt5a7.mongodb.net/entrelinhas?retryWrites=true&w=majority";
 
 let conn = null;
-
 async function connectDB() {
   if (conn) return conn;
   conn = await mongoose.connect(MONGO_URI);
@@ -50,8 +49,7 @@ export default async function handler(req, res) {
   await connectDB();
 
   const method = req.method;
-  const fullPath = req.url.split("?")[0];
-  const path = fullPath.replace(/^\/api/, "");
+  const path = req.url.split("?")[0].replace(/^\/api/, "");
   const parts = path.split("/").filter(Boolean);
 
   // ================= AUTH =================
@@ -77,18 +75,12 @@ export default async function handler(req, res) {
     if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
 
     const token = jwt.sign({ id: user._id, username: user.username }, SECRET);
-
-    return res.json({
-      token,
-      userId: user._id,
-      username: user.username
-    });
+    return res.json({ token, userId: user._id, username: user.username });
   }
 
   // ================= AUTENTICAÇÃO =================
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
-
   let currentUser = null;
   if (token) {
     try {
@@ -99,12 +91,7 @@ export default async function handler(req, res) {
 
   // ================= GET POSTS =================
   if (parts[0] === "posts" && parts.length === 1 && method === "GET") {
-    const posts = await Post.find({
-      $or: [
-        { hidden: false },
-        { hidden: { $exists: false } }
-      ]
-    }).sort({ createdAt: -1 });
+    const posts = await Post.find({ $or: [{ hidden: false }, { hidden: { $exists: false } }] }).sort({ createdAt: -1 });
     return res.json(posts);
   }
 
@@ -113,10 +100,8 @@ export default async function handler(req, res) {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
 
     const { content, anonymous, hideLikes, mood } = req.body;
-
     if (!content || content.length > 500)
       return res.status(400).json({ error: "Conteúdo inválido (máx 500 caracteres)" });
-
     if (/(http|www|\.com|\.net|\.org)/i.test(content))
       return res.status(400).json({ error: "Links não permitidos" });
 
@@ -124,19 +109,9 @@ export default async function handler(req, res) {
       userId: currentUser._id,
       createdAt: { $gte: new Date(new Date().setHours(0,0,0,0)) }
     });
+    if (alreadyPostedToday) return res.status(400).json({ error: "Você já postou hoje" });
 
-    if (alreadyPostedToday)
-      return res.status(400).json({ error: "Você já postou hoje" });
-
-    const post = new Post({
-      userId: currentUser._id,
-      username: currentUser.username,
-      content,
-      anonymous,
-      hideLikes,
-      mood
-    });
-
+    const post = new Post({ userId: currentUser._id, username: currentUser.username, content, anonymous, hideLikes, mood });
     await post.save();
     return res.json(post);
   }
@@ -144,105 +119,69 @@ export default async function handler(req, res) {
   // ================= DELETE POST =================
   if (parts[0] === "posts" && parts[1] && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
     const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
-
-    if (String(post.userId) !== String(currentUser._id))
-      return res.status(403).json({ error: "Você não pode apagar este post" });
-
+    if (String(post.userId) !== String(currentUser._id)) return res.status(403).json({ error: "Não autorizado" });
     await Post.deleteOne({ _id: post._id });
     return res.json({ message: "Post apagado" });
   }
 
-  // ================= DELETE COMMENT =================
-  if (parts[0] === "posts" && parts[1] && parts[2] === "comments" && parts[3] && method === "DELETE") {
+  // ================= COMMENT POST =================
+  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
     const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    const comment = post.comments.id(parts[3]);
-    if (!comment) return res.status(404).json({ error: "Comentário não encontrado" });
+    const { content } = req.body;
+    if (!content || content.length > 250) return res.status(400).json({ error: "Comentário inválido (máx 250 caracteres)" });
+    if (/(http|www|\.com|\.net|\.org)/i.test(content)) return res.status(400).json({ error: "Links não permitidos" });
 
-    if (String(comment.userId) !== String(currentUser._id))
-      return res.status(403).json({ error: "Você não pode apagar este comentário" });
-
-    comment.remove();
+    post.comments.push({ userId: currentUser._id, username: currentUser.username, content });
     await post.save();
-    return res.json({ message: "Comentário apagado" });
+    return res.json({ message: "Comentário adicionado" });
   }
 
-  // ================= REPORT POST =================
-  if (parts[0] === "posts" && parts[1] && parts[2] === "report" && method === "POST") {
+  // ================= DELETE COMMENT =================
+  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && parts[3] && method === "DELETE") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const postId = parts[1];
-    const post = await Post.findById(postId);
+    const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    const alreadyReported = post.reports.some(id => id.equals(currentUser._id));
-    if (alreadyReported)
-      return res.status(400).json({ error: "Você já denunciou este post" });
+    const commentIndex = post.comments.findIndex(c => String(c._id) === parts[3] && String(c.userId) === String(currentUser._id));
+    if (commentIndex === -1) return res.status(403).json({ error: "Não autorizado ou comentário não existe" });
 
-    post.reports.push(currentUser._id);
-
-    if (post.reports.length >= 4) {
-      await Post.deleteOne({ _id: post._id });
-      return res.json({ message: "Post removido por denúncias" });
-    }
-
+    post.comments.splice(commentIndex, 1);
     await post.save();
-    return res.json({ message: "Denúncia registrada" });
+    return res.json({ message: "Comentário apagado" });
   }
 
   // ================= LIKE =================
   if (parts[0] === "posts" && parts[1] && parts[2] === "like" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const postId = parts[1];
-    const post = await Post.findById(postId);
+    const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    const liked = post.likes.some(id => id.equals(currentUser._id));
-    if (liked) {
-      post.likes = post.likes.filter(id => !id.equals(currentUser._id));
-    } else {
-      post.likes.push(currentUser._id);
-    }
+    const liked = post.likes.some(id => String(id) === String(currentUser._id));
+    if (liked) post.likes = post.likes.filter(id => String(id) !== String(currentUser._id));
+    else post.likes.push(currentUser._id);
 
     await post.save();
-    return res.json({
-      likes: post.likes.length,
-      liked: !liked,
-      postId: post._id.toString()
-    });
+    return res.json({ likes: post.likes.length, liked: !liked, postId: post._id.toString() });
   }
 
-  // ================= COMMENT =================
-  if (parts[0] === "posts" && parts[1] && parts[2] === "comment" && method === "POST") {
+  // ================= REPORT POST =================
+  if (parts[0] === "posts" && parts[1] && parts[2] === "report" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-
-    const postId = parts[1];
-    const { content } = req.body;
-
-    if (!content || content.length > 250)
-      return res.status(400).json({ error: "Comentário inválido (máx 250 caracteres)" });
-
-    if (/(http|www|\.com|\.net|\.org)/i.test(content))
-      return res.status(400).json({ error: "Links não permitidos" });
-
-    const post = await Post.findById(postId);
+    const post = await Post.findById(parts[1]);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
-    post.comments.push({
-      userId: currentUser._id,
-      username: currentUser.username,
-      content
-    });
+    const alreadyReported = post.reports.some(id => String(id) === String(currentUser._id));
+    if (alreadyReported) return res.status(400).json({ error: "Você já denunciou este post" });
 
-    await post.save();
-    return res.json({ message: "Comentário adicionado" });
+    post.reports.push(currentUser._id);
+    if (post.reports.length >= 4) await Post.deleteOne({ _id: post._id });
+    else await post.save();
+    return res.json({ message: "Denúncia registrada" });
   }
 
   res.status(404).json({ error: "Rota não encontrada" });

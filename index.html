@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EntreLinhas</title>
-
 <style>
 body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f7f8; }
 header { background: linear-gradient(90deg, rgba(74,144,226,0.8), rgba(110,198,168,0.8)); padding: 25px; color: white; text-align: center; border-bottom-left-radius: 25px; border-bottom-right-radius: 25px; }
@@ -20,19 +19,8 @@ button:hover { opacity: 0.9; }
 .modal-content { background: white; padding: 25px; border-radius: 20px; max-width: 400px; text-align: center; }
 .hidden { display: none; }
 .commentBox { margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 10px; }
-
-/* Centralizar checkboxes */
-.checkboxGroup {
-  display: flex;
-  justify-content: center;
-  gap: 25px;
-  margin: 10px 0;
-}
-.checkboxGroup label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.checkboxGroup { display: flex; justify-content: center; gap: 25px; margin: 10px 0; }
+.checkboxGroup label { display: flex; align-items: center; gap: 6px; }
 </style>
 </head>
 
@@ -141,30 +129,30 @@ function escapeHtml(text) {
 }
 
 /* ================= AUTH ================= */
-async function register() {
-  const res = await fetch(`${API}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: newEmail.value,
-      username: newUsername.value,
-      password: newPassword.value,
-      region: region.value,
-      grade: grade.value
+async function register(){
+  const res = await fetch(API+"/auth/register",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      email:newEmail.value,
+      username:newUsername.value,
+      password:newPassword.value,
+      region:region.value,
+      grade:grade.value
     })
   });
   const data = await res.json();
   alert(data.message || data.error);
 }
 
-async function login() {
-  const res = await fetch(`${API}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.value, password: password.value })
+async function login(){
+  const res = await fetch(API+"/auth/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ email:email.value, password:password.value })
   });
   const data = await res.json();
-  if (data.error) return alert(data.error);
+  if(data.error){ alert(data.error); return; }
 
   localStorage.setItem("token", data.token);
   localStorage.setItem("userId", data.userId);
@@ -178,39 +166,38 @@ async function login() {
 }
 
 /* ================= POSTS ================= */
-async function createPost() {
-  const res = await fetch(`${API}/posts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token")
+async function createPost(){
+  const res = await fetch(API+"/posts",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+localStorage.getItem("token")
     },
-    body: JSON.stringify({
-      content: postContent.value,
-      anonymous: anonymous.checked,
-      hideLikes: hideLikes.checked,
-      mood: mood.value
+    body:JSON.stringify({
+      content:postContent.value,
+      anonymous:anonymous.checked,
+      hideLikes:hideLikes.checked,
+      mood:mood.value
     })
   });
   const data = await res.json();
-  if (data.error) return alert(data.error);
-  postContent.value = "";
+  if(data.error){ alert(data.error); return; }
+  postContent.value="";
   loadPosts();
 }
 
-async function loadPosts() {
-  const res = await fetch(`${API}/posts`);
-  const posts = await res.json();
-
+async function loadPosts(){
+  const res = await fetch(API+"/posts");
+  let posts = await res.json();
   posts.sort(() => Math.random() - 0.5);
 
   const container = document.getElementById("posts");
-  container.innerHTML = "";
+  container.innerHTML="";
   const userId = localStorage.getItem("userId");
 
-  posts.forEach(p => {
+  posts.forEach(p=>{
     const div = document.createElement("div");
-    div.className = "post";
+    div.className="post";
 
     const username = p.anonymous ? "Anônimo" : escapeHtml(p.username || "Usuário");
     const isOwner = String(p.userId) === String(userId);
@@ -232,14 +219,10 @@ async function loadPosts() {
         <button data-postid="${p._id}" class="commentBtn">Enviar</button>
       </div>
       <div class="commentBox">
-        ${comments.map(c => `
+        ${comments.map(c=>`
           <div>
             <b>${escapeHtml(c.username || "Usuário")}</b>: ${escapeHtml(c.content)}
-            ${
-              String(c.userId) === String(userId)
-              ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>`
-              : ""
-            }
+            ${String(c.userId) === String(userId) ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>` : ""}
           </div>
         `).join("")}
       </div>
@@ -247,49 +230,44 @@ async function loadPosts() {
     container.appendChild(div);
   });
 
-  // ================= EVENTOS =================
-  document.querySelectorAll(".deleteBtn").forEach(btn => btn.onclick = () => deletePost(btn.dataset.postid));
-  document.querySelectorAll(".deleteCommentBtn").forEach(btn => btn.onclick = (e) => deleteComment(btn.dataset.postid, btn.dataset.commentid));
-  document.querySelectorAll(".reportBtn").forEach(btn => btn.onclick = () => reportPost(btn.dataset.postid));
-  document.querySelectorAll(".commentBtn").forEach(btn => commentBtnHandler);
-  document.querySelectorAll(".commentBtn").forEach(btn => btn.onclick = () => commentPost(btn.dataset.postid));
-  document.querySelectorAll(".likeBtn").forEach(btn => btn.onclick = () => likePost(btn.dataset.postid, btn));
+  document.querySelectorAll(".deleteBtn").forEach(btn => { btn.onclick = () => deletePost(btn.dataset.postid); });
+  document.querySelectorAll(".reportBtn").forEach(btn => { btn.onclick = () => reportPost(btn.dataset.postid); });
+  document.querySelectorAll(".likeBtn").forEach(btn => { btn.onclick = () => likePost(btn.dataset.postid, btn); });
+  document.querySelectorAll(".commentBtn").forEach(btn => {
+    btn.onclick = () => commentPost(btn.dataset.postid, document.getElementById("commentInput"+btn.dataset.postid).value);
+  });
+  document.querySelectorAll(".deleteCommentBtn").forEach(btn => {
+    btn.onclick = () => deleteComment(btn.dataset.postid, btn.dataset.commentid);
+  });
 }
 
 /* ================= FUNÇÕES DINÂMICAS ================= */
-async function deletePost(postId) {
-  const res = await fetch(`${API}/posts/${postId}`, {
-    method: "DELETE",
-    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-  });
+async function deletePost(postId){
+  const res = await fetch(`${API}/posts/${postId}`,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
   const data = await res.json();
-  if (data.error) return alert(data.error);
+  if(data.error) return alert(data.error);
   loadPosts();
 }
 
-async function deleteComment(postId, commentId) {
-  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`, {
-    method: "DELETE",
-    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-  });
+async function deleteComment(postId, commentId){
+  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`,{ method:"DELETE", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
   const data = await res.json();
-  if (data.error) return alert(data.error);
+  if(data.error) return alert(data.error);
   loadPosts();
 }
 
-async function likePost(postId, btn) {
-  const res = await fetch(`${API}/posts/${postId}/like`, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
-  });
+async function likePost(postId, btn){
+  const res = await fetch(`${API}/posts/${postId}/like`,{ method:"POST", headers:{ "Authorization":"Bearer "+localStorage.getItem("token") }});
   const data = await res.json();
-  if (data.error) return alert(data.error);
+  if(data.error) return alert(data.error);
   const hideLikes = btn.dataset.hidelikes === "true";
   btn.innerText = `Curtir ${hideLikes ? "" : "(" + data.likes + ")"}`;
 }
 
 /* ================= MODAIS ================= */
-function closeHelp() { helpModal.classList.add("hidden"); }
+function closeHelp(){ helpModal.classList.add("hidden"); }
+helpBtn.onclick = ()=>helpModal.classList.remove("hidden");
+rulesBtn.onclick = ()=>rulesModal.classList.remove("hidden");
 </script>
 
 </body>
