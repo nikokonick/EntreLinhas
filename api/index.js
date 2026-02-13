@@ -54,40 +54,36 @@ export default async function handler(req, res) {
   const path = fullPath.replace(/^\/api/, "");
   const parts = path.split("/").filter(Boolean);
 
- // ================= AUTH =================
-if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
-  const { email, username, password, grade, region } = req.body;
-  if (!email || !username || !password || !grade || !region)
-    return res.status(400).json({ error: "Preencha todos os campos" });
+  // ================= AUTH =================
+  if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
+    const { email, username, password, grade, region } = req.body;
+    if (!email || !username || !password || !grade || !region)
+      return res.status(400).json({ error: "Preencha todos os campos" });
 
-  try {
-    const user = new User({ email, username, password, grade, region });
-    await user.save();
-    return res.json({ message: "Conta criada" });
-  } catch (err) {
-    if (err.code === 11000)
-      return res.status(400).json({ error: "Email ou username já cadastrado" });
-    return res.status(500).json({ error: "Erro no servidor" });
+    try {
+      const user = new User({ email, username, password, grade, region });
+      await user.save();
+      return res.json({ message: "Conta criada" });
+    } catch (err) {
+      if (err.code === 11000)
+        return res.status(400).json({ error: "Email ou username já cadastrado" });
+      return res.status(500).json({ error: "Erro no servidor" });
+    }
   }
-}
 
-if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email, password });
-  if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
+  if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email, password });
+    if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
 
-  const token = jwt.sign(
-    { id: user._id, username: user.username },
-    SECRET
-  );
+    const token = jwt.sign({ id: user._id, username: user.username }, SECRET);
 
-  return res.json({
-    token,
-    userId: user._id,
-    username: user.username
-  });
-}
-
+    return res.json({
+      token,
+      userId: user._id,
+      username: user.username
+    });
+  }
 
   // ================= AUTENTICAÇÃO =================
   const authHeader = req.headers.authorization || "";
@@ -101,7 +97,7 @@ if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
     } catch {}
   }
 
-  // ================= GET POSTS (🔥 CORRIGIDO AQUI) =================
+  // ================= GET POSTS =================
   if (parts[0] === "posts" && parts.length === 1 && method === "GET") {
     const posts = await Post.find({
       $or: [
@@ -109,7 +105,6 @@ if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
         { hidden: { $exists: false } }
       ]
     }).sort({ createdAt: -1 });
-
     return res.json(posts);
   }
 
@@ -144,6 +139,38 @@ if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
 
     await post.save();
     return res.json(post);
+  }
+
+  // ================= DELETE POST =================
+  if (parts[0] === "posts" && parts[1] && method === "DELETE") {
+    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
+
+    const post = await Post.findById(parts[1]);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+    if (String(post.userId) !== String(currentUser._id))
+      return res.status(403).json({ error: "Você não pode apagar este post" });
+
+    await Post.deleteOne({ _id: post._id });
+    return res.json({ message: "Post apagado" });
+  }
+
+  // ================= DELETE COMMENT =================
+  if (parts[0] === "posts" && parts[1] && parts[2] === "comments" && parts[3] && method === "DELETE") {
+    if (!currentUser) return res.status(401).json({ error: "Token necessário" });
+
+    const post = await Post.findById(parts[1]);
+    if (!post) return res.status(404).json({ error: "Post não encontrado" });
+
+    const comment = post.comments.id(parts[3]);
+    if (!comment) return res.status(404).json({ error: "Comentário não encontrado" });
+
+    if (String(comment.userId) !== String(currentUser._id))
+      return res.status(403).json({ error: "Você não pode apagar este comentário" });
+
+    comment.remove();
+    await post.save();
+    return res.json({ message: "Comentário apagado" });
   }
 
   // ================= REPORT POST =================

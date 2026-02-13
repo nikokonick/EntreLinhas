@@ -21,7 +21,7 @@ button:hover { opacity: 0.9; }
 .hidden { display: none; }
 .commentBox { margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 10px; }
 
-/* 🔥 NOVO - Centralizar checkboxes */
+/* Centralizar checkboxes */
 .checkboxGroup {
   display: flex;
   justify-content: center;
@@ -95,7 +95,6 @@ button:hover { opacity: 0.9; }
     </div>
 
     <button onclick="createPost()">Publicar</button>
-    <!-- 🔥 BOTÃO HISTÓRICO REMOVIDO -->
   </div>
 
   <div id="posts"></div>
@@ -141,32 +140,31 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
-
 /* ================= AUTH ================= */
-async function register(){
-  const res = await fetch(API+"/auth/register",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      email:newEmail.value,
-      username:newUsername.value,
-      password:newPassword.value,
-      region:region.value,
-      grade:grade.value
+async function register() {
+  const res = await fetch(`${API}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: newEmail.value,
+      username: newUsername.value,
+      password: newPassword.value,
+      region: region.value,
+      grade: grade.value
     })
   });
   const data = await res.json();
   alert(data.message || data.error);
 }
 
-async function login(){
-  const res = await fetch(API+"/auth/login",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ email:email.value, password:password.value })
+async function login() {
+  const res = await fetch(`${API}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.value, password: password.value })
   });
   const data = await res.json();
-  if(data.error){ alert(data.error); return; }
+  if (data.error) return alert(data.error);
 
   localStorage.setItem("token", data.token);
   localStorage.setItem("userId", data.userId);
@@ -179,52 +177,47 @@ async function login(){
   loadPosts();
 }
 
-
 /* ================= POSTS ================= */
-async function createPost(){
-  const res = await fetch(API+"/posts",{
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":"Bearer "+localStorage.getItem("token")
+async function createPost() {
+  const res = await fetch(`${API}/posts`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token")
     },
-    body:JSON.stringify({
-      content:postContent.value,
-      anonymous:anonymous.checked,
-      hideLikes:hideLikes.checked,
-      mood:mood.value
+    body: JSON.stringify({
+      content: postContent.value,
+      anonymous: anonymous.checked,
+      hideLikes: hideLikes.checked,
+      mood: mood.value
     })
   });
   const data = await res.json();
-  if(data.error){ alert(data.error); return; }
-  postContent.value="";
+  if (data.error) return alert(data.error);
+  postContent.value = "";
   loadPosts();
 }
 
-async function loadPosts(){
-  const res = await fetch(API+"/posts");
-  let posts = await res.json();
+async function loadPosts() {
+  const res = await fetch(`${API}/posts`);
+  const posts = await res.json();
 
   posts.sort(() => Math.random() - 0.5);
 
   const container = document.getElementById("posts");
-  container.innerHTML="";
+  container.innerHTML = "";
   const userId = localStorage.getItem("userId");
 
-  posts.forEach(p=>{
+  posts.forEach(p => {
     const div = document.createElement("div");
-    div.className="post";
+    div.className = "post";
 
-    const username = p.anonymous 
-      ? "Anônimo" 
-      : escapeHtml(p.username || "Usuário");
-
+    const username = p.anonymous ? "Anônimo" : escapeHtml(p.username || "Usuário");
     const isOwner = String(p.userId) === String(userId);
-
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
     const comments = Array.isArray(p.comments) ? p.comments : [];
 
-    div.innerHTML=`
+    div.innerHTML = `
       <strong>${escapeHtml(p.mood || "")}</strong><br>
       ${username}<br>
       <p>${escapeHtml(p.content)}</p>
@@ -239,7 +232,7 @@ async function loadPosts(){
         <button data-postid="${p._id}" class="commentBtn">Enviar</button>
       </div>
       <div class="commentBox">
-        ${comments.map(c=>`
+        ${comments.map(c => `
           <div>
             <b>${escapeHtml(c.username || "Usuário")}</b>: ${escapeHtml(c.content)}
             ${
@@ -254,25 +247,49 @@ async function loadPosts(){
     container.appendChild(div);
   });
 
-  document.querySelectorAll(".deleteBtn").forEach(btn=>{
-    btn.onclick = () => deletePost(btn.dataset.postid);
-  });
-  document.querySelectorAll(".reportBtn").forEach(btn=>{
-    btn.onclick = () => reportPost(btn.dataset.postid);
-  });
-  document.querySelectorAll(".likeBtn").forEach(btn=>{
-    btn.onclick = () => likePost(btn.dataset.postid);
-  });
-  document.querySelectorAll(".commentBtn").forEach(btn=>{
-    btn.onclick = () => commentPost(btn.dataset.postid);
-  });
-  document.querySelectorAll(".deleteCommentBtn").forEach(btn=>{
-    btn.onclick = () => deleteComment(btn.dataset.postid, btn.dataset.commentid);
-  });
+  // ================= EVENTOS =================
+  document.querySelectorAll(".deleteBtn").forEach(btn => btn.onclick = () => deletePost(btn.dataset.postid));
+  document.querySelectorAll(".deleteCommentBtn").forEach(btn => btn.onclick = (e) => deleteComment(btn.dataset.postid, btn.dataset.commentid));
+  document.querySelectorAll(".reportBtn").forEach(btn => btn.onclick = () => reportPost(btn.dataset.postid));
+  document.querySelectorAll(".commentBtn").forEach(btn => commentBtnHandler);
+  document.querySelectorAll(".commentBtn").forEach(btn => btn.onclick = () => commentPost(btn.dataset.postid));
+  document.querySelectorAll(".likeBtn").forEach(btn => btn.onclick = () => likePost(btn.dataset.postid, btn));
 }
 
+/* ================= FUNÇÕES DINÂMICAS ================= */
+async function deletePost(postId) {
+  const res = await fetch(`${API}/posts/${postId}`, {
+    method: "DELETE",
+    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+  });
+  const data = await res.json();
+  if (data.error) return alert(data.error);
+  loadPosts();
+}
 
-/* restante do código permanece igual */
+async function deleteComment(postId, commentId) {
+  const res = await fetch(`${API}/posts/${postId}/comment/${commentId}`, {
+    method: "DELETE",
+    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+  });
+  const data = await res.json();
+  if (data.error) return alert(data.error);
+  loadPosts();
+}
+
+async function likePost(postId, btn) {
+  const res = await fetch(`${API}/posts/${postId}/like`, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + localStorage.getItem("token") }
+  });
+  const data = await res.json();
+  if (data.error) return alert(data.error);
+  const hideLikes = btn.dataset.hidelikes === "true";
+  btn.innerText = `Curtir ${hideLikes ? "" : "(" + data.likes + ")"}`;
+}
+
+/* ================= MODAIS ================= */
+function closeHelp() { helpModal.classList.add("hidden"); }
 </script>
 
 </body>
