@@ -161,7 +161,9 @@ export default async function handler(req, res) {
   // ================= LIKE POST =================
   if (parts[0] === "posts" && parts[1] && parts[2] === "like" && method === "POST") {
     if (!currentUser) return res.status(401).json({ error: "Token necessário" });
-    const post = await Post.findById(parts[1]);
+
+    const postId = parts[1];
+    const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ error: "Post não encontrado" });
 
     const liked = post.likes.some(id => String(id) === String(currentUser._id));
@@ -187,6 +189,5 @@ export default async function handler(req, res) {
     return res.json({ message: "Denúncia registrada" });
   }
 
-  // ================= ROTA NÃO ENCONTRADA =================
-  return res.status(404).json({ error: "Rota não encontrada" });
+  res.status(404).json({ error: "Rota não encontrada" });
 }
