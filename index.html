@@ -199,7 +199,10 @@ async function loadPosts(){
     const div = document.createElement("div");
     div.className="post";
     const username = p.anonymous ? "Anônimo" : escapeHtml(p.username);
-    const isOwner = p.userId === userId || p.userId === String(userId);
+
+    // ✅ CORRIGIDO AQUI
+    const isOwner = String(p.userId) === String(userId);
+
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
     const comments = Array.isArray(p.comments) ? p.comments : [];
 
@@ -221,7 +224,12 @@ async function loadPosts(){
         ${comments.map(c=>`
           <div>
             <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}
-            ${(c.userId === userId || c.userId === String(userId)) ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>` : ""}
+            ${
+              // ✅ CORRIGIDO AQUI TAMBÉM
+              String(c.userId) === String(userId)
+              ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>`
+              : ""
+            }
           </div>
         `).join("")}
       </div>
@@ -245,6 +253,7 @@ async function loadPosts(){
     btn.onclick = () => deleteComment(btn.dataset.postid, btn.dataset.commentid);
   });
 }
+
 
 /* restante do código permanece igual */
 </script>
