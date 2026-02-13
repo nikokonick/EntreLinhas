@@ -193,7 +193,8 @@ async function loadPosts(){
 
   const container = document.getElementById("posts");
   container.innerHTML="";
-  const userId = getUserId();
+  const userId = localStorage.getItem("userId");
+
 
   posts.forEach(p=>{
     const div = document.createElement("div");
