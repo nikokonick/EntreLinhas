@@ -130,6 +130,18 @@ button:hover { opacity: 0.9; }
 <script>
 const API = "/api";
 
+/* ================= UTIL ================= */
+function escapeHtml(text) {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
 /* ================= AUTH ================= */
 async function register(){
   const res = await fetch(API+"/auth/register",{
@@ -156,7 +168,6 @@ async function login(){
   const data = await res.json();
   if(data.error){ alert(data.error); return; }
 
-  // 🔥 ADICIONADO
   localStorage.setItem("token", data.token);
   localStorage.setItem("userId", data.userId);
   localStorage.setItem("username", data.username);
@@ -194,20 +205,20 @@ async function loadPosts(){
   const res = await fetch(API+"/posts");
   let posts = await res.json();
 
-  /* 🔥 ORDEM ALEATÓRIA */
   posts.sort(() => Math.random() - 0.5);
 
   const container = document.getElementById("posts");
   container.innerHTML="";
   const userId = localStorage.getItem("userId");
 
-
   posts.forEach(p=>{
     const div = document.createElement("div");
     div.className="post";
-    const username = p.anonymous ? "Anônimo" : escapeHtml(p.username);
 
-    // ✅ CORRIGIDO AQUI
+    const username = p.anonymous 
+      ? "Anônimo" 
+      : escapeHtml(p.username || "Usuário");
+
     const isOwner = String(p.userId) === String(userId);
 
     const likesCount = Array.isArray(p.likes) ? p.likes.length : 0;
@@ -230,9 +241,8 @@ async function loadPosts(){
       <div class="commentBox">
         ${comments.map(c=>`
           <div>
-            <b>${escapeHtml(c.username)}</b>: ${escapeHtml(c.content)}
+            <b>${escapeHtml(c.username || "Usuário")}</b>: ${escapeHtml(c.content)}
             ${
-              // ✅ CORRIGIDO AQUI TAMBÉM
               String(c.userId) === String(userId)
               ? `<button data-postid="${p._id}" data-commentid="${c._id}" class="deleteCommentBtn">X</button>`
               : ""
