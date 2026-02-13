@@ -155,13 +155,19 @@ async function login(){
   });
   const data = await res.json();
   if(data.error){ alert(data.error); return; }
+
+  // 🔥 ADICIONADO
   localStorage.setItem("token", data.token);
+  localStorage.setItem("userId", data.userId);
+  localStorage.setItem("username", data.username);
+
   authContainer.classList.add("hidden");
   feedContainer.classList.remove("hidden");
   helpBtn.classList.remove("hidden");
   rulesBtn.classList.remove("hidden");
   loadPosts();
 }
+
 
 /* ================= POSTS ================= */
 async function createPost(){

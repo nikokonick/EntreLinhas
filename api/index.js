@@ -54,31 +54,40 @@ export default async function handler(req, res) {
   const path = fullPath.replace(/^\/api/, "");
   const parts = path.split("/").filter(Boolean);
 
-  // ================= AUTH =================
-  if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
-    const { email, username, password, grade, region } = req.body;
-    if (!email || !username || !password || !grade || !region)
-      return res.status(400).json({ error: "Preencha todos os campos" });
+ // ================= AUTH =================
+if (parts[0] === "auth" && parts[1] === "register" && method === "POST") {
+  const { email, username, password, grade, region } = req.body;
+  if (!email || !username || !password || !grade || !region)
+    return res.status(400).json({ error: "Preencha todos os campos" });
 
-    try {
-      const user = new User({ email, username, password, grade, region });
-      await user.save();
-      return res.json({ message: "Conta criada" });
-    } catch (err) {
-      if (err.code === 11000)
-        return res.status(400).json({ error: "Email ou username já cadastrado" });
-      return res.status(500).json({ error: "Erro no servidor" });
-    }
+  try {
+    const user = new User({ email, username, password, grade, region });
+    await user.save();
+    return res.json({ message: "Conta criada" });
+  } catch (err) {
+    if (err.code === 11000)
+      return res.status(400).json({ error: "Email ou username já cadastrado" });
+    return res.status(500).json({ error: "Erro no servidor" });
   }
+}
 
-  if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email, password });
-    if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
+if (parts[0] === "auth" && parts[1] === "login" && method === "POST") {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email, password });
+  if (!user) return res.status(400).json({ error: "Credenciais inválidas" });
 
-    const token = jwt.sign({ id: user._id, username: user.username }, SECRET);
-    return res.json({ token });
-  }
+  const token = jwt.sign(
+    { id: user._id, username: user.username },
+    SECRET
+  );
+
+  return res.json({
+    token,
+    userId: user._id,
+    username: user.username
+  });
+}
+
 
   // ================= AUTENTICAÇÃO =================
   const authHeader = req.headers.authorization || "";
